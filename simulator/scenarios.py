@@ -1,5 +1,7 @@
 import uuid
-
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
+import config
 import config
 from kpi_calculator import TickData, calculate_kpis
 from sensors import (
@@ -143,5 +145,20 @@ def run_scenario(strategy: str, duration_days: int = 7) -> str:
         "kpis":          kpis,
         "hourly_samples":hourly_samples,
     }
+
+    # ── Write KPIs to InfluxDB for Grafana visualization ───
+    client    = InfluxDBClient(url=config.INFLUX_URL, token=config.INFLUX_TOKEN, org=config.INFLUX_ORG)
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+
+    for kpi_name, kpi_value in kpis.items():
+        point = (
+            Point("scenario_kpi")
+            .tag("strategy", strategy)
+            .tag("scenario_id", scenario_id)
+            .field(kpi_name, float(kpi_value))
+        )
+        write_api.write(bucket=config.INFLUX_BUCKET, record=point)
+
+    client.close()
 
     return scenario_id
